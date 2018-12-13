@@ -5,6 +5,8 @@ import { createExchangeSchema } from "./exchangeSchema";
 import { mergeSchemas } from "graphql-tools";
 // @ts-ignore
 import interceptor from "express-interceptor";
+import { createGravitySchema } from "./gravitySchema";
+import Dataloader from "dataloader";
 
 const debugInterceptor = interceptor((req: any, res: any) => ({
   isInterceptable: () => true,
@@ -17,9 +19,61 @@ const debugInterceptor = interceptor((req: any, res: any) => ({
 async function boot() {
   try {
     const exchangeSchema = await createExchangeSchema();
+    const gravitySchema = await createGravitySchema();
 
     const schema = mergeSchemas({
-      schemas: [localSchema, exchangeSchema]
+      schemas: [
+        localSchema,
+        exchangeSchema,
+        gravitySchema,
+        `extend type Viewer {
+          orders: [Order]!
+        }
+        extend type LineItem {
+          artwork: Artwork
+        }`
+      ],
+      resolvers: {
+        Viewer: {
+          orders: {
+            fragment: `... on Viewer { orderIDs }`,
+            resolve(viewer, args, context, info) {
+              return Promise.all(
+                viewer.orderIDs.map((orderId: any) => {
+                  console.log("sure");
+                  return info.mergeInfo.delegateToSchema({
+                    schema: exchangeSchema,
+                    operation: "query",
+                    fieldName: "order",
+                    args: {
+                      id: orderId
+                    },
+                    context,
+                    info
+                  });
+                })
+              );
+            }
+          }
+        },
+        LineItem: {
+          artwork: {
+            fragment: `... on LineItem { artworkId }`,
+            resolve(lineItem, args, context, info) {
+              return info.mergeInfo.delegateToSchema({
+                schema: gravitySchema,
+                operation: "query",
+                fieldName: "artwork",
+                args: {
+                  id: lineItem.artworkId
+                },
+                context,
+                info
+              });
+            }
+          }
+        }
+      }
     });
 
     const app = express();

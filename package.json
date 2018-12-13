@@ -4,6 +4,7 @@
     "@types/express-graphql": "^0.6.2",
     "apollo-link-context": "^1.0.10",
     "apollo-link-http": "^1.5.7",
+    "dataloader": "^1.4.0",
     "dotenv": "^6.2.0",
     "express": "^4.16.4",
     "express-graphql": "^0.7.1",
@@ -20,6 +21,7 @@
     "typescript": "^3.2.2"
   },
   "scripts": {
-    "start": "node --inspect-brk -r ts-node/register ./index.ts"
+    "start:debug": "node --inspect -r ts-node/register ./index.ts",
+    "start": "ts-node ./index.ts"
   }
 }
