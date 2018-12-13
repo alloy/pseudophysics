@@ -6,7 +6,7 @@ import { mergeSchemas } from "graphql-tools";
 // @ts-ignore
 import interceptor from "express-interceptor";
 import { createGravitySchema } from "./gravitySchema";
-import Dataloader from "dataloader";
+import DataLoader from "dataloader";
 
 const debugInterceptor = interceptor((req: any, res: any) => ({
   isInterceptable: () => true,
@@ -60,13 +60,8 @@ async function boot() {
           artwork: {
             fragment: `... on LineItem { artworkId }`,
             resolve(lineItem, args, context, info) {
-              return info.mergeInfo.delegateToSchema({
-                schema: gravitySchema,
-                operation: "query",
-                fieldName: "artwork",
-                args: {
-                  id: lineItem.artworkId
-                },
+              return context.dataloaders.artwork.load({
+                id: lineItem.artworkId,
                 context,
                 info
               });
@@ -78,12 +73,39 @@ async function boot() {
 
     const app = express();
 
+    interface ArtworkDataLoaderKey {
+      id: string;
+      context: any;
+      info: any;
+    }
+
     app.use(
       "/",
       debugInterceptor,
       graphqlHTTP({
         schema,
         graphiql: true,
+        context: {
+          dataloaders: {
+            // @ts-ignore
+            artwork: new DataLoader((keys: ArtworkDataLoaderKey[]) => {
+              // This takes a niave approach and doesn't differentiate between
+              // artworks with different field selections. Should use info to
+              // group by similar selections and promise.all the collection of
+              // results
+              return keys[0].info.mergeInfo.delegateToSchema({
+                schema: gravitySchema,
+                operation: "query",
+                fieldName: "artworks",
+                args: {
+                  ids: keys.map(key => key.id)
+                },
+                context: keys[0].context,
+                info: keys[0].info
+              });
+            })
+          }
+        },
         formatError: error => {
           console.log(error);
           return {
